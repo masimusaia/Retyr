@@ -105,11 +105,10 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 
 <form id="login">
   <h2>Shop admin</h2>
-  <label>GitHub username<input name="owner" required autocomplete="off"></label>
-  <label>Shop repository<input name="repo" required autocomplete="off"></label>
+  <label>Name<input name="owner" required autocomplete="off"></label>
+  <label>Repository<input name="repo" required autocomplete="off"></label>
   <label>Branch<input name="branch" value="main" required></label>
-  <label>Access token<input name="token" type="password" required autocomplete="off"></label>
-  <p class="note">Create a fine-grained token limited to the shop repository with "Contents: Read and write". It is stored only in this browser.</p>
+  <label>Password<input name="token" type="password" required autocomplete="off"></label>
   <button class="btn" type="submit">Open the shop</button>
   <p id="err"></p>
 </form>
@@ -184,7 +183,7 @@ function ser(v, i = "") {
 }
 const decl = o => names.map(n => `const ${n} = ${ser(o[n])};`).join("\n\n").replace(/<\//g, "<\\/") + "\n";
 
-/* ---------- colours: the variables in the :root block of style.css ---------- */
+/* ---------- colours ---------- */
 const probe = document.body.appendChild(document.createElement("i"));
 probe.hidden = true;
 function parseColor(v) {
@@ -195,7 +194,6 @@ function parseColor(v) {
 }
 const h2 = n => Math.round(n).toString(16).padStart(2, "0");
 const toHex = c => "#" + h2(c.r) + h2(c.g) + h2(c.b) + (c.a < 1 ? h2(c.a * 255) : "");
-// [variable, label, has opacity]
 const CGROUPS = [
   ["Page", [["--paper", "Page background"], ["--nav", "Menu bar", 1], ["--white", "Panels: cart, filters, fields"], ["--line", "Thin lines", 1], ["--outline", "Outlines of chips, fields, icons", 1], ["--overlay", "Dimming behind the cart", 1]]],
   ["Text", [["--ink", "Body text"], ["--muted", "Secondary text", 1], ["--heading", "Headings"], ["--link", "Links"]]],
@@ -281,7 +279,6 @@ function build() {
   return "<!doctype html>" + d.documentElement.outerHTML;
 }
 
-/* Runs inside the preview iframe (it is serialised with toString, so it must not use anything from the outside). */
 function previewScript(init) {
   const post = m => parent.postMessage(m, "*");
   if (init.h) location.hash = init.h;
@@ -346,7 +343,6 @@ function previewScript(init) {
     else startEdit(x, e);
   }, true);
 
-  // safety net: in a srcdoc frame a link like href="#" resolves against the admin page and would load the admin inside the preview
   addEventListener("click", e => {
     const a = e.target.closest && e.target.closest("a[href]");
     if (a && !e.defaultPrevented && /^#/.test(a.getAttribute("href"))) e.preventDefault();
@@ -387,7 +383,7 @@ function previewScript(init) {
     el.removeAttribute("contenteditable");
     if (changed) el.setAttribute("data-raw", el.innerHTML); else el.innerHTML = old;
     cur = null;
-    if (window.__shop) window.__shop.render("html");   // links inside the text get their address again
+    if (window.__shop) window.__shop.render("html");
   });
 
   // live updates from the admin
@@ -420,8 +416,6 @@ function previewScript(init) {
     }
   });
 }
-/* A full reload of the preview is only for the first load (or an old site without the live hook).
-   Every edit after that is sent into the running preview, so it keeps its tab, scroll, cart and filters. */
 const rebuild = () => { ready = false; $("#view").srcdoc = build(); };
 function sync() { clearTimeout(timer); timer = setTimeout(flush, 150); upd(); }
 function flush() {
@@ -465,8 +459,6 @@ addEventListener("message", e => {
     if (ta) { ta.scrollIntoView({ block: "center" }); ta.focus(); }
   }
 });
-
-/* open the editor for something that was clicked in the preview */
 function jump(p) {
   const t = p.split(".")[0];
   if (!names.includes(t)) return;
@@ -507,7 +499,6 @@ function addTag(inp) {
   if (!a.some(x => x.toLowerCase() === v.toLowerCase())) a.push(v);
   dirty.cfg = true; refreshTags(p, true); sync();
 }
-/* ---------- terms: blocks (paragraph, lists, table) ---------- */
 const BL = { p: "Paragraph", ol: "Numbered list", ul: "Bullet list", table: "Table" };
 const cb = (a, p, i, t, title) => `<button type="button" data-a="${a}" data-p="${p}" data-i="${i}" title="${title}">${t}</button>`;
 const ta = (p, k, val) => `<textarea rows="${Math.min(8, Math.ceil(String(val).length / 45) || 1)}" data-p="${p}" data-t="s" data-k="${k}">${esc(val)}</textarea>`;
@@ -709,8 +700,7 @@ panel.addEventListener("click", e => {
   else return;
   const st = panel.scrollTop; renderPanel(); panel.scrollTop = st;
 });
-
-/* ---------- resizable settings panel ---------- */
+  
 const grip = $("#grip"), side = $("aside"), WKEY = "shop-admin-width";
 const setW = w => document.documentElement.style.setProperty("--aw", Math.min(Math.max(340, innerWidth - 260), Math.max(340, Math.round(w))) + "px");
 const saveW = () => { try { localStorage.setItem(WKEY, Math.round(side.getBoundingClientRect().width)); } catch (e) {} };

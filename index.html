@@ -24,9 +24,13 @@ button,input,textarea,select{font:inherit;color:inherit}
 .btn:disabled{opacity:.4;cursor:not-allowed;background:var(--rose);border-color:var(--rose)}
 main{flex:1;display:flex;min-height:0}
 #view{flex:1;min-width:0;border:0;background:#fff}
-aside{width:440px;display:flex;flex-direction:column;background:#fff;border-left:1px solid var(--line)}
-.tabs{display:flex;gap:4px;padding:8px;overflow-x:auto;border-bottom:1px solid var(--line)}
-.tabs button{flex-shrink:0;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer}
+#grip{flex:0 0 7px;cursor:col-resize;background:var(--line);touch-action:none;transition:background .15s}
+#grip:hover,#grip.on,#grip:focus-visible{background:var(--rose);outline:0}
+main.drag{cursor:col-resize;-webkit-user-select:none;user-select:none}
+main.drag #view{pointer-events:none}
+aside{width:var(--aw,440px);flex-shrink:0;display:flex;flex-direction:column;background:#fff;border-left:1px solid var(--line)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border-bottom:1px solid var(--line)}
+.tabs button{padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer}
 .tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
 #panel{flex:1;overflow:auto;padding:14px}
 .f{display:grid;gap:4px;margin-bottom:10px}
@@ -42,7 +46,6 @@ details.it>summary::-webkit-details-marker{display:none}
 details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 .body{padding:0 10px}
 .tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
-.num{flex-shrink:0;min-width:20px;color:var(--muted);font-weight:700}
 .th{width:28px;height:28px;object-fit:cover;border-radius:5px;background:var(--soft)}
 .ctl{display:flex;gap:4px}
 .ctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
@@ -80,7 +83,7 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 #login input{padding:9px 10px;border:1px solid var(--line);border-radius:8px}
 .note{margin:0;color:var(--muted);font-size:13px}
 #err{margin:0;color:#a3122f}
-@media(max-width:900px){main{flex-direction:column}#view{flex:none;height:45%}aside{width:auto;flex:1;border-left:0;border-top:1px solid var(--line)}.top{flex-wrap:wrap}}
+@media(max-width:900px){#grip{display:none}main{flex-direction:column}#view{flex:none;height:45%}aside{width:auto;flex:1;border-left:0;border-top:1px solid var(--line)}.top{flex-wrap:wrap}}
 </style>
 </head>
 <body>
@@ -106,6 +109,7 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
   </header>
   <main>
     <iframe id="view" title="Shop preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+    <div id="grip" role="separator" aria-orientation="vertical" aria-label="Resize the settings panel" tabindex="0" title="Drag to resize"></div>
     <aside>
       <div class="tabs" id="tabs"></div>
       <div id="panel"></div>
@@ -417,8 +421,8 @@ function renderPanel() {
   $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + (tab === "TERMS" ? '<p class="note">Texts can contain HTML, for example a link: &lt;a data-contact href="#"&gt;Telegram&lt;/a&gt;</p>' : "") + ed(cfg[tab], tab);
 }
 function item(x, p, i) {
-  const t = x && typeof x === "object" ? (x.name || x.title || x.text || x.alt || "") : String(x);
-  return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${typeof x === "string" ? `<b class="num">${i + 1}.</b>` : ""}${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
+  const t = x && typeof x === "object" ? (x.name || x.title || x.text || x.alt || "") : String(i + 1);
+  return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
 }
 const tagsHtml = (v, p, k) => v.map((t, i) => `<span class="tag">${esc(t)}<button type="button" data-a="untag" data-p="${p}" data-i="${i}" aria-label="Remove">✕</button></span>`).join("")
   + `<input class="tagin" list="dl-${k}" placeholder="add and press Enter" data-tagin="${p}" data-k="${k}">`;
@@ -619,6 +623,23 @@ panel.addEventListener("toggle", e => {
   const d = e.target;
   if (d.matches && d.matches("details.it")) { if (d.open) openSet.add(d.dataset.p); else openSet.delete(d.dataset.p); }
 }, true);
+
+/* ---------- resizable settings panel ---------- */
+const grip = $("#grip"), side = $("aside"), WKEY = "shop-admin-width";
+const setW = w => document.documentElement.style.setProperty("--aw", Math.min(Math.max(300, innerWidth - 260), Math.max(300, Math.round(w))) + "px");
+const saveW = () => { try { localStorage.setItem(WKEY, Math.round(side.getBoundingClientRect().width)); } catch (e) {} };
+try { const w = +localStorage.getItem(WKEY); if (w) setW(w); } catch (e) {}
+const endDrag = () => { grip.classList.remove("on"); $("main").classList.remove("drag"); saveW(); };
+grip.addEventListener("pointerdown", e => { e.preventDefault(); grip.setPointerCapture(e.pointerId); grip.classList.add("on"); $("main").classList.add("drag"); });
+grip.addEventListener("pointermove", e => { if (grip.hasPointerCapture(e.pointerId)) setW(innerWidth - e.clientX); });
+grip.addEventListener("pointerup", endDrag);
+grip.addEventListener("pointercancel", endDrag);
+grip.addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  setW(side.getBoundingClientRect().width + (e.key === "ArrowLeft" ? 30 : -30)); saveW();
+});
+addEventListener("resize", () => setW(side.getBoundingClientRect().width));
 
 $("#tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]");

@@ -124,7 +124,7 @@ try { S = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
 
 let cfg, names = [], files = {}, doc, TX = [], tmpl = {}, tab = "";
 const store = {}, pend = new Set(), openSet = new Set(), dirty = { cfg: false, html: false };
-let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer;
+let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer, ready = false, sent = {}, sentHdr = "", txSent = [];
 
 const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TERMS: "Terms", TEXTS: "Page texts" };
 const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos", TERMS: "#tos" };
@@ -192,9 +192,15 @@ async function load() {
 }
 
 /* ---------- preview ---------- */
-function build() {
+function viewCfg() {
   const v = structuredClone(cfg);
   (function f(o) { for (const k in o) { const x = o[k]; if (k === "img" && typeof x === "string" && x) o[k] = urlFor(x); else if (x && typeof x === "object") f(x); } })(v);
+  return v;
+}
+function build() {
+  const v = viewCfg();
+  sent = {}; names.forEach(n => { sent[n] = JSON.stringify(v[n]); });
+  sentHdr = urlFor(hdrPath); txSent = TX.map(e => e.innerHTML);
   const d = doc.cloneNode(true);
   [...d.body.querySelectorAll(SEL)].filter(txOk).forEach((e, i) => { e.setAttribute("data-tx", i); e.setAttribute("data-raw", e.innerHTML); });
   const mk = (t, txt) => { const e = d.createElement(t); e.textContent = txt; return e; };
@@ -211,7 +217,7 @@ function build() {
 function previewScript(init) {
   const post = m => parent.postMessage(m, "*");
   if (init.h) location.hash = init.h;
-  addEventListener("load", () => scrollTo(0, init.y || 0));
+  addEventListener("load", () => { scrollTo(0, init.y || 0); post({ t: "ready" }); });
   addEventListener("scroll", () => post({ t: "y", y: scrollY }));
   document.addEventListener("click", () => setTimeout(() => post({ t: "h", h: location.hash }), 60), true);
 
@@ -247,7 +253,6 @@ function previewScript(init) {
     }
     if (!r || !el.contains(r.startContainer)) { r = document.createRange(); r.selectNodeContents(el); r.collapse(false); }
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-    post({ t: "edit" });
   }
 
   function pickHeader() {
@@ -312,13 +317,53 @@ function previewScript(init) {
     const el = e.target;
     if (!el || !el.getAttribute || el.getAttribute("contenteditable") !== "true") return;
     el.removeAttribute("contenteditable");
-    if (!changed) el.innerHTML = old;
+    if (changed) el.setAttribute("data-raw", el.innerHTML); else el.innerHTML = old;
     cur = null;
-    post({ t: "done", changed });
+    if (window.__shop) window.__shop.render("html");   // links inside the text get their address again
+  });
+
+  // live updates from the admin
+  const rep = (t, s) => {
+    if (Array.isArray(t)) { t.length = 0; t.push(...s); }
+    else { for (const k of Object.keys(t)) delete t[k]; Object.assign(t, s); }
+  };
+  addEventListener("message", e => {
+    const m = e.data;
+    if (!m || e.source !== parent) return;
+    const S = window.__shop;
+    if (!S) { post({ t: "reload" }); return; }
+    if (m.t === "set-cfg") {
+      for (const n in m.data) {
+        try { rep((0, eval)(n), m.data[n]); } catch (err) { post({ t: "reload" }); return; }
+      }
+      for (const n in m.data) S.render(n);
+    } else if (m.t === "set-tx") {
+      const el = document.querySelector('[data-tx="' + m.i + '"]');
+      if (el && el !== cur) { el.innerHTML = m.html; el.setAttribute("data-raw", m.html); S.render("html"); }
+    } else if (m.t === "set-hdr") {
+      const box = document.querySelector("#site-header");
+      if (!box) return;
+      let im = box.querySelector("img");
+      if (!im) { im = document.createElement("img"); im.alt = "Shop name"; box.append(im); }
+      im.src = m.src;
+    } else if (m.t === "goto") {
+      location.hash = m.h;
+    }
   });
 }
-const rebuild = () => { $("#view").srcdoc = build(); };
-function sync() { clearTimeout(timer); timer = setTimeout(rebuild, 350); upd(); }
+/* A full reload of the preview is only for the first load (or an old site without the live hook).
+   Every edit after that is sent into the running preview, so it keeps its tab, scroll, cart and filters. */
+const rebuild = () => { ready = false; $("#view").srcdoc = build(); };
+function sync() { clearTimeout(timer); timer = setTimeout(flush, 150); upd(); }
+function flush() {
+  if (!ready) return;
+  const w = $("#view").contentWindow, v = viewCfg(), data = {};
+  for (const n of names) { const j = JSON.stringify(v[n]); if (j !== sent[n]) { sent[n] = j; data[n] = v[n]; } }
+  if (Object.keys(data).length) w.postMessage({ t: "set-cfg", data }, "*");
+  const h = urlFor(hdrPath);
+  if (h !== sentHdr) { sentHdr = h; w.postMessage({ t: "set-hdr", src: h }, "*"); }
+  TX.forEach((e, i) => { if (e.innerHTML !== txSent[i]) { txSent[i] = e.innerHTML; w.postMessage({ t: "set-tx", i, html: e.innerHTML }, "*"); } });
+}
 function upd() {
   const any = dirty.cfg || dirty.html || pend.size > 0;
   $("#state").textContent = any ? "Unpublished changes" : "Everything is published";
@@ -329,14 +374,14 @@ addEventListener("message", e => {
   if (e.source !== $("#view").contentWindow || !m || typeof m !== "object") return;
   if (m.t === "y") view.y = m.y;
   else if (m.t === "h") view.h = m.h;
-  else if (m.t === "edit") clearTimeout(timer);
+  else if (m.t === "ready") { ready = true; flush(); }
+  else if (m.t === "reload") rebuild();
   else if (m.t === "tx") {
     if (!TX[m.i]) return;
-    TX[m.i].innerHTML = m.html; dirty.html = true; upd();
+    TX[m.i].innerHTML = m.html; txSent[m.i] = TX[m.i].innerHTML; dirty.html = true; upd();
     const ta = tab === "TEXTS" ? $(`#panel [data-tx="${m.i}"]`) : null;
     if (ta) ta.value = m.html.trim();
   }
-  else if (m.t === "done") { if (m.changed) sync(); }
   else if (m.t === "hdr") {
     addImg(m.f, hdrPath).then(() => { if (tab === "TEXTS") renderPanel(); sync(); })
       .catch(() => { $("#state").textContent = "Could not read the image"; });
@@ -578,7 +623,11 @@ $("#tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]");
   if (!b) return;
   tab = b.dataset.tab; renderTabs(); renderPanel();
-  if (PAGE[tab]) { view.h = PAGE[tab]; view.y = 0; sync(); }
+  if (PAGE[tab]) {
+    view.h = PAGE[tab];
+    if (ready) $("#view").contentWindow.postMessage({ t: "goto", h: PAGE[tab] }, "*");
+    else rebuild();
+  }
 });
 
 /* ---------- publish ---------- */

@@ -521,8 +521,7 @@ function blockHtml(b, p) {
   } else if (b.type === "table") {
     const rows = b.rows || [], head = rows[0] || [];
     body = `<label class="chk"><input type="checkbox" data-p="${p}.header" data-t="b"${b.header !== false ? " checked" : ""}> first row is a header</label>
-<div class="tbl"><table><tr><td></td>${head.map((_, c) => `<td><span class="mini">${cb("col+", p, c, "+", "Insert a column after")}${cb("col-", p, c, "✕", "Delete the column")}</span></td>`).join("")}</tr>${rows.map((r, ri) => `<tr><td><span class="mini">${cb("row+", p, ri, "+", "Insert a row below")}${cb("row-", p, ri, "✕", "Delete the row")}</span></td>${r.map((c, ci) => `<td><input type="text" data-p="${p}.rows.${ri}.${ci}" data-t="s" value="${esc(c)}"></td>`).join("")}</tr>`).join("")}</table></div>
-<button type="button" class="btn ghost" data-a="tblzones" data-p="${p}">Fill from shipping zones</button>`;
+<div class="tbl"><table><tr><td></td>${head.map((_, c) => `<td><span class="mini">${cb("col+", p, c, "+", "Insert a column after")}${cb("col-", p, c, "✕", "Delete the column")}</span></td>`).join("")}</tr>${rows.map((r, ri) => `<tr><td><span class="mini">${cb("row+", p, ri, "+", "Insert a row below")}${cb("row-", p, ri, "✕", "Delete the row")}</span></td>${r.map((c, ci) => `<td><input type="text" data-p="${p}.rows.${ri}.${ci}" data-t="s" value="${esc(c)}"></td>`).join("")}</tr>`).join("")}</table></div>`;
   }
   return `<div class="blk" data-blk="${p}"><div class="bh"><span>${esc(BL[b.type] || b.type)}</span><span class="ctl">${extra}${cb("bup", p, 0, "↑", "Move up")}${cb("bdown", p, 0, "↓", "Move down")}${cb("bdel", p, 0, "✕", "Delete the block")}</span></div>${body}</div>`;
 }
@@ -552,13 +551,6 @@ function blockAction(a, b) {
     case "row-": if (rows().length > 1) rows().splice(i, 1); redraw(); return true;
     case "col+": rows().forEach(r => r.splice(i + 1, 0, "")); redraw(`[data-p="${p}.rows.0.${i + 1}"]`); return true;
     case "col-": if (rows()[0].length > 1) rows().forEach(r => r.splice(i, 1)); redraw(); return true;
-    case "tblzones": {
-      if (!confirm("Replace the table with the current shipping zones?")) return true;
-      const c = cfg.SHOP.currency || "";
-      blk().header = true;
-      blk().rows = [["Destination", "Time", "Shipping", "Free shipping"], ...cfg.SHOP.zones.map(z => [z.name, z.days, z.base + " " + c, z.freeFrom ? "from " + z.freeFrom + " " + c : "none"])];
-      redraw(); return true;
-    }
   }
   return false;
 }

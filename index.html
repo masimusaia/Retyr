@@ -246,7 +246,7 @@ function previewScript(init) {
     const t = e.target;
     if (!t || !t.closest) return;
     const ce = editing(t);
-    if (ce) { e.stopPropagation(); if (ce.tagName === "SUMMARY") e.preventDefault(); return; }
+    if (ce) { e.stopPropagation(); if (ce.tagName === "SUMMARY" || t.closest("a")) e.preventDefault(); return; }
     if (t.closest("#site-header")) { stop(e); pickHeader(); return; }
     const c = t.closest("[data-cfg]");
     if (c && !t.closest("button")) { stop(e); post({ t: "cfg", p: c.getAttribute("data-cfg") }); return; }
@@ -256,6 +256,12 @@ function previewScript(init) {
     if (x.tagName === "BUTTON") post({ t: "txpanel", i: +x.getAttribute("data-tx") });
     else startEdit(x, e);
   }, true);
+
+  // safety net: in a srcdoc frame a link like href="#" resolves against the admin page and would load the admin inside the preview
+  addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (a && !e.defaultPrevented && /^#/.test(a.getAttribute("href"))) e.preventDefault();
+  });
 
   document.addEventListener("dblclick", e => {
     const x = e.target.closest && e.target.closest(".nav a[data-tx]");

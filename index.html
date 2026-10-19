@@ -14,7 +14,8 @@ body{margin:0;height:100dvh;display:flex;flex-direction:column;color:var(--ink);
 button,input,textarea,select{font:inherit;color:inherit}
 #app{display:flex;flex-direction:column;flex:1;min-height:0}
 .top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
-.top h1{margin:0 auto 0 0;font:400 1.3rem/1 "Yeseva One",Georgia,serif}
+.top h1{margin:0;font:400 1.3rem/1 "Yeseva One",Georgia,serif}
+.tip{margin:0 auto 0 8px;color:var(--muted);font-size:12px}
 #state{color:var(--muted)}
 .btn{padding:9px 16px;border-radius:999px;border:1.5px solid var(--rose);background:var(--rose);color:#fff;cursor:pointer;font-weight:500;white-space:nowrap}
 .btn:hover{background:var(--ink);border-color:var(--ink)}
@@ -50,6 +51,12 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 .im input[type=text]{flex:1}
 .up{padding:7px 12px;cursor:pointer}
 .arr>.btn{margin:2px 0 12px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.tags:focus-within{border-color:var(--rose)}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--soft)}
+.tag button{width:20px;height:20px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;font-size:11px;line-height:1}
+.tag button:hover{background:#fff}
+.tags .tagin{flex:1 1 90px;width:auto;min-width:90px;border:0;outline:0;padding:4px 6px;background:none}
 #login{max-width:380px;margin:8vh auto;padding:24px;background:#fff;border-radius:10px;display:grid;gap:12px}
 #login h2{margin:0;font:400 1.6rem/1 "Yeseva One",Georgia,serif}
 #login label{display:grid;gap:4px;font-weight:500}
@@ -75,6 +82,7 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 <div id="app" hidden>
   <header class="top">
     <h1>Shop admin</h1>
+    <span class="tip">Click the header, a text or an item in the preview to edit it. Menu items: double-click. Esc finishes editing.</span>
     <span id="state"></span>
     <button id="pub" class="btn" type="button" disabled>Publish</button>
     <button id="out" class="btn ghost" type="button">Log out</button>
@@ -105,7 +113,9 @@ let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer;
 const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TEXTS: "Page texts" };
 const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos" };
 const GRP = { links: "Home", shop: "Shop", custom: "Custom merch", commissions: "Commissions", tos: "Terms", cart: "Cart", nav: "Navigation", foot: "Footer" };
-const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", per100g: "per 100 g", base: "base rate", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", weight: "weight, g", closedStatus: "status when closed", open: "open" };
+const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", base: "shipping cost", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", closedStatus: "status when closed", open: "open", percent: "the price is a percentage (%), not money", fandom: "fandoms", character: "characters" };
+const TAGS = new Set(["fandom", "character"]);
+const txOk = e => e.innerHTML.trim() && !e.querySelector("[id]");
 const NUL = new Set(["from", "freeFrom"]);
 const LONG = new Set(["desc", "tagline", "note", "status", "closedStatus"]);
 const SEL = "h1,h2,h3,p,li,summary,th,.tile strong,.tile span,.nav a,.field label,.checks label,#cart-shop,#copy";
@@ -125,6 +135,7 @@ const urlFor = p => store[p] || (/^(https?:|data:|\/\/)/.test(p) ? p : `https://
 
 const key = k => /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k);
 function ser(v, i = "") {
+  if (Array.isArray(v) && v.every(x => !x || typeof x !== "object")) return "[" + v.map(x => JSON.stringify(x)).join(", ") + "]";
   if (Array.isArray(v)) return v.length ? "[\n" + v.map(x => i + "  " + ser(x, i + "  ")).join(",\n") + "\n" + i + "]" : "[]";
   if (v && typeof v === "object") {
     const ks = Object.keys(v);
@@ -144,6 +155,14 @@ async function load() {
   names = [...conf.matchAll(/^const\s+([A-Z_]+)\s*=/gm)].map(m => m[1]);
   names.sort((a, b) => (Object.keys(TABS).indexOf(a) + 99) % 99 - (Object.keys(TABS).indexOf(b) + 99) % 99);
   cfg = new Function(conf + "\nreturn {" + names.join(",") + "};")();
+  // older configs: single fandom/character strings become lists, weight is gone, new fields get their defaults
+  (cfg.PRODUCTS || []).forEach(p => {
+    for (const k of ["fandom", "character"]) p[k] = p[k] == null || p[k] === "" ? [] : [].concat(p[k]);
+    delete p.weight;
+  });
+  ((cfg.SHOP || {}).zones || []).forEach(z => { delete z.per100g; });
+  ((cfg.CUSTOM || {}).types || []).forEach(t => { if (!("img" in t)) t.img = ""; });
+  ((cfg.COMMISSIONS || {}).addons || []).forEach(a => { if (!("percent" in a)) a.percent = false; });
   const walk = (v, p) => {
     if (Array.isArray(v)) { if (v.length) tmpl[p] = structuredClone(v[v.length - 1]); v.forEach((x, i) => walk(x, p + "." + i)); }
     else if (v && typeof v === "object") for (const k in v) walk(v[k], p + "." + k);
@@ -151,7 +170,7 @@ async function load() {
   names.forEach(n => walk(cfg[n], n));
   const h = doc.querySelector("#site-header img");
   if (h) hdrPath = h.getAttribute("src");
-  TX = [...doc.body.querySelectorAll(SEL)].filter(e => e.innerHTML.trim() && !e.querySelector("[id]"));
+  TX = [...doc.body.querySelectorAll(SEL)].filter(txOk);
   tab = names.includes("PRODUCTS") ? "PRODUCTS" : names[0];
   renderTabs(); renderPanel(); rebuild(); upd();
 }
@@ -161,14 +180,120 @@ function build() {
   const v = structuredClone(cfg);
   (function f(o) { for (const k in o) { const x = o[k]; if (k === "img" && typeof x === "string" && x) o[k] = urlFor(x); else if (x && typeof x === "object") f(x); } })(v);
   const d = doc.cloneNode(true);
+  [...d.body.querySelectorAll(SEL)].filter(txOk).forEach((e, i) => { e.setAttribute("data-tx", i); e.setAttribute("data-raw", e.innerHTML); });
   const mk = (t, txt) => { const e = d.createElement(t); e.textContent = txt; return e; };
   d.querySelector('link[href="style.css"]')?.replaceWith(mk("style", files.css));
   d.querySelector('script[src="config.js"]')?.replaceWith(mk("script", decl(v)));
   d.querySelector('script[src="app.js"]')?.replaceWith(mk("script", files.app));
   d.querySelector("#site-header img")?.setAttribute("src", urlFor(hdrPath));
-  const hash = /^#[\w-]+$/.test(view.h) ? `location.hash="${view.h}";` : "";
-  d.head.prepend(mk("script", `${hash}addEventListener("load",()=>scrollTo(0,${+view.y || 0}));addEventListener("scroll",()=>parent.postMessage({y:scrollY},"*"));document.addEventListener("click",()=>setTimeout(()=>parent.postMessage({h:location.hash},"*"),60),true);`));
+  const init = { h: /^#[\w-]+$/.test(view.h) ? view.h : "", y: +view.y || 0 };
+  d.head.prepend(mk("script", `(${previewScript})(${JSON.stringify(init)});`));
   return "<!doctype html>" + d.documentElement.outerHTML;
+}
+
+/* Runs inside the preview iframe (it is serialised with toString, so it must not use anything from the outside). */
+function previewScript(init) {
+  const post = m => parent.postMessage(m, "*");
+  if (init.h) location.hash = init.h;
+  addEventListener("load", () => scrollTo(0, init.y || 0));
+  addEventListener("scroll", () => post({ t: "y", y: scrollY }));
+  document.addEventListener("click", () => setTimeout(() => post({ t: "h", h: location.hash }), 60), true);
+
+  const css = document.createElement("style");
+  css.textContent = [
+    "[data-tx]{cursor:text}",
+    ".nav a[data-tx],[data-tx]:is(button){cursor:pointer}",
+    "[data-cfg]{cursor:pointer}",
+    "[data-tx]:hover,[data-cfg]:hover{outline:1px dashed #b8416c;outline-offset:3px}",
+    "[contenteditable=true]{outline:2px solid #b8416c!important;outline-offset:3px;cursor:text;-webkit-user-select:text;user-select:text}",
+    "#site-header{position:relative;min-height:48px;cursor:pointer}",
+    "#site-header:hover{outline:2px dashed #b8416c;outline-offset:-2px}",
+    "#site-header::after{content:'Click to change the header image';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 12px;border-radius:999px;background:rgba(43,26,35,.82);color:#fff;font:500 13px Onest,system-ui,sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s}",
+    "#site-header:hover::after{opacity:1}"
+  ].join("\n");
+  document.head.append(css);
+
+  let cur = null, old = "", changed = false;
+  const stop = e => { e.preventDefault(); e.stopPropagation(); };
+  const editing = t => t && t.closest ? t.closest("[contenteditable=true]") : null;
+
+  function startEdit(el, e) {
+    if (cur === el) return;
+    cur = el; old = el.innerHTML; changed = false;
+    el.innerHTML = el.getAttribute("data-raw");
+    el.setAttribute("contenteditable", "true");
+    el.focus();
+    let r = null;
+    if (e && document.caretRangeFromPoint) r = document.caretRangeFromPoint(e.clientX, e.clientY);
+    else if (e && document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (p) { r = document.createRange(); r.setStart(p.offsetNode, p.offset); r.collapse(true); }
+    }
+    if (!r || !el.contains(r.startContainer)) { r = document.createRange(); r.selectNodeContents(el); r.collapse(false); }
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    post({ t: "edit" });
+  }
+
+  function pickHeader() {
+    const i = document.createElement("input");
+    i.type = "file"; i.accept = "image/*"; i.style.display = "none";
+    document.body.append(i);
+    i.addEventListener("change", () => { if (i.files[0]) post({ t: "hdr", f: i.files[0] }); i.remove(); });
+    i.click();
+  }
+
+  document.addEventListener("click", e => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const ce = editing(t);
+    if (ce) { e.stopPropagation(); if (ce.tagName === "SUMMARY") e.preventDefault(); return; }
+    if (t.closest("#site-header")) { stop(e); pickHeader(); return; }
+    const c = t.closest("[data-cfg]");
+    if (c && !t.closest("button")) { stop(e); post({ t: "cfg", p: c.getAttribute("data-cfg") }); return; }
+    const x = t.closest("[data-tx]");
+    if (!x || x.matches(".nav a")) return;
+    stop(e);
+    if (x.tagName === "BUTTON") post({ t: "txpanel", i: +x.getAttribute("data-tx") });
+    else startEdit(x, e);
+  }, true);
+
+  document.addEventListener("dblclick", e => {
+    const x = e.target.closest && e.target.closest(".nav a[data-tx]");
+    if (x) { stop(e); startEdit(x, e); }
+  }, true);
+
+  document.addEventListener("input", e => {
+    const el = editing(e.target);
+    if (!el) return;
+    changed = true;
+    post({ t: "tx", i: +el.getAttribute("data-tx"), html: el.innerHTML });
+  });
+
+  document.addEventListener("keydown", e => {
+    const el = editing(e.target);
+    if (!el) return;
+    if (e.key === "Escape") { el.blur(); return; }
+    if (e.key === " " && el.tagName === "SUMMARY") { e.preventDefault(); document.execCommand("insertText", false, " "); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (el.tagName === "P" || el.tagName === "LI") document.execCommand("insertLineBreak"); else el.blur();
+    }
+  }, true);
+
+  document.addEventListener("paste", e => {
+    if (!editing(e.target)) return;
+    e.preventDefault();
+    document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+  }, true);
+
+  document.addEventListener("focusout", e => {
+    const el = e.target;
+    if (!el || !el.getAttribute || el.getAttribute("contenteditable") !== "true") return;
+    el.removeAttribute("contenteditable");
+    if (!changed) el.innerHTML = old;
+    cur = null;
+    post({ t: "done", changed });
+  });
 }
 const rebuild = () => { $("#view").srcdoc = build(); };
 function sync() { clearTimeout(timer); timer = setTimeout(rebuild, 350); upd(); }
@@ -177,23 +302,76 @@ function upd() {
   $("#state").textContent = any ? "Unpublished changes" : "Everything is published";
   $("#pub").disabled = !any;
 }
-addEventListener("message", e => { if (e.source === $("#view").contentWindow && e.data) Object.assign(view, e.data); });
+addEventListener("message", e => {
+  const m = e.data;
+  if (e.source !== $("#view").contentWindow || !m || typeof m !== "object") return;
+  if (m.t === "y") view.y = m.y;
+  else if (m.t === "h") view.h = m.h;
+  else if (m.t === "edit") clearTimeout(timer);
+  else if (m.t === "tx") {
+    if (!TX[m.i]) return;
+    TX[m.i].innerHTML = m.html; dirty.html = true; upd();
+    const ta = tab === "TEXTS" ? $(`#panel [data-tx="${m.i}"]`) : null;
+    if (ta) ta.value = m.html.trim();
+  }
+  else if (m.t === "done") { if (m.changed) sync(); }
+  else if (m.t === "hdr") {
+    addImg(m.f, hdrPath).then(() => { if (tab === "TEXTS") renderPanel(); sync(); })
+      .catch(() => { $("#state").textContent = "Could not read the image"; });
+  }
+  else if (m.t === "cfg") jump(m.p);
+  else if (m.t === "txpanel") {
+    tab = "TEXTS"; renderTabs(); renderPanel();
+    const ta = $(`#panel [data-tx="${m.i}"]`);
+    if (ta) { ta.scrollIntoView({ block: "center" }); ta.focus(); }
+  }
+});
+
+/* open the editor for something that was clicked in the preview */
+function jump(p) {
+  const t = p.split(".")[0];
+  if (!names.includes(t)) return;
+  tab = t; openSet.add(p);
+  renderTabs(); renderPanel();
+  const el = $(`#panel [data-p="${p}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "nearest" });
+  if (el.animate) el.animate([{ background: "#ecd5de" }, { background: "transparent" }], { duration: 1200 });
+  if (el.matches("input,textarea")) el.focus();
+}
 
 /* ---------- editor ---------- */
 function renderTabs() {
   $("#tabs").innerHTML = [...names, "TEXTS"].map(n => `<button type="button" data-tab="${n}" class="${n === tab ? "on" : ""}">${esc(TABS[n] || n)}</button>`).join("");
 }
 function renderPanel() {
-  const dl = ["type", "fandom", "character"].map(k => `<datalist id="dl-${k}">${[...new Set((cfg.PRODUCTS || []).map(x => x[k]).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("")}</datalist>`).join("");
+  const dl = ["type", "fandom", "character"].map(k => `<datalist id="dl-${k}">${[...new Set((cfg.PRODUCTS || []).flatMap(x => [].concat(x[k] || [])).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("")}</datalist>`).join("");
   $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + ed(cfg[tab], tab);
 }
 function item(x, p, i) {
   const t = x && typeof x === "object" ? (x.name || x.text || x.alt || "") : String(x);
   return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
 }
+const tagsHtml = (v, p, k) => v.map((t, i) => `<span class="tag">${esc(t)}<button type="button" data-a="untag" data-p="${p}" data-i="${i}" aria-label="Remove">✕</button></span>`).join("")
+  + `<input class="tagin" list="dl-${k}" placeholder="add and press Enter" data-tagin="${p}" data-k="${k}">`;
+function refreshTags(p, focus) {
+  const box = $(`#panel [data-tags="${p}"]`);
+  if (!box) return;
+  const k = box.querySelector(".tagin").dataset.k;
+  box.innerHTML = tagsHtml(get(p), p, k);
+  if (focus) box.querySelector(".tagin").focus();
+}
+function addTag(inp) {
+  const v = inp.value.replace(/,/g, " ").trim(), p = inp.dataset.tagin;
+  if (!v) return;
+  const a = get(p);
+  if (!a.some(x => x.toLowerCase() === v.toLowerCase())) a.push(v);
+  dirty.cfg = true; refreshTags(p, true); sync();
+}
 function ed(v, p, k) {
   const lab = LBL[k] || k || "";
   if (k === "id") return "";
+  if (TAGS.has(k) && Array.isArray(v)) return `<div class="f"><label>${esc(lab)}</label><div class="tags" data-tags="${p}">${tagsHtml(v, p, k)}</div></div>`;
   if (Array.isArray(v)) return `<div class="arr"><div class="ah">${esc(lab || TABS[p] || p)}</div>${v.map((x, i) => item(x, p + "." + i, i)).join("")}<button type="button" class="btn ghost" data-a="add" data-p="${p}">+ Add</button></div>`;
   if (v && typeof v === "object") return `<div class="obj">${k ? `<div class="ah">${esc(lab)}</div>` : ""}${Object.keys(v).map(x => ed(v[x], p + "." + x, x)).join("")}</div>`;
   if (typeof v === "boolean") return `<label class="chk"><input type="checkbox" data-p="${p}" data-t="b"${v ? " checked" : ""}> ${esc(lab)}</label>`;
@@ -240,6 +418,7 @@ async function addImg(f, fixed) {
 const panel = $("#panel");
 panel.addEventListener("input", e => {
   const el = e.target;
+  if (el.matches(".tagin")) { if (e.inputType === undefined || e.inputType === "insertReplacementText") addTag(el); return; }
   if (el.dataset.tx !== undefined) { TX[+el.dataset.tx].innerHTML = el.value; dirty.html = true; return sync(); }
   if (el.dataset.meta) {
     if (el.dataset.meta === "title") doc.title = el.value;
@@ -261,7 +440,17 @@ panel.addEventListener("input", e => {
   }
   sync();
 });
+panel.addEventListener("keydown", e => {
+  const el = e.target;
+  if (!el.matches || !el.matches(".tagin")) return;
+  if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(el); }
+  else if (e.key === "Backspace" && !el.value) {
+    const a = get(el.dataset.tagin);
+    if (a.length) { a.pop(); dirty.cfg = true; refreshTags(el.dataset.tagin, true); sync(); }
+  }
+});
 panel.addEventListener("change", async e => {
+  if (e.target.matches(".tagin")) { addTag(e.target); return; }
   const f = e.target.files && e.target.files[0];
   if (!f) return;
   try {
@@ -275,6 +464,7 @@ panel.addEventListener("click", e => {
   if (!b) return;
   e.preventDefault();
   const a = b.dataset.a, p = b.dataset.p;
+  if (a === "untag") { get(p).splice(+b.dataset.i, 1); dirty.cfg = true; refreshTags(p, true); sync(); return; }
   if (a === "add") {
     const t = tmpl[p];
     if (!t) { $("#state").textContent = "Nothing to copy from: add one item to config.js first"; return; }

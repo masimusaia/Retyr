@@ -77,6 +77,21 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 .tag button{width:20px;height:20px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;font-size:11px;line-height:1}
 .tag button:hover{background:#fff}
 .tags .tagin{flex:1 1 90px;width:auto;min-width:90px;border:0;outline:0;padding:4px 6px;background:none}
+.cbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.cbar .note{flex:1}
+.cbar .btn{padding:6px 12px;font-size:13px}
+.cr{display:grid;grid-template-columns:minmax(0,1fr) 56px 78px 28px 22px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.cl{line-height:1.2}
+.cr input[type=range]{width:100%;margin:0;accent-color:var(--rose)}
+.cr .hx{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;font:12px ui-monospace,Menlo,Consolas,monospace}
+.cr .hx:focus{outline:0;border-color:var(--rose)}
+.cr .hx.bad{border-color:#a3122f;background:#fdeef1}
+.cr input[type=color]{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+.cr input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.cr input[type=color]::-webkit-color-swatch{border:0;border-radius:4px}
+.rs{width:22px;height:22px;padding:0;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer}
+.rs:hover{background:var(--soft)}
+.rs.off{visibility:hidden}
 #login{max-width:380px;margin:8vh auto;padding:24px;background:#fff;border-radius:10px;display:grid;gap:12px}
 #login h2{margin:0;font:400 1.6rem/1 "Yeseva One",Georgia,serif}
 #login label{display:grid;gap:4px;font-weight:500}
@@ -128,10 +143,11 @@ let S = {};
 try { S = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
 
 let cfg, names = [], files = {}, doc, TX = [], tmpl = {}, tab = "";
-const store = {}, pend = new Set(), openSet = new Set(), dirty = { cfg: false, html: false };
+const store = {}, pend = new Set(), openSet = new Set(), dirty = { cfg: false, html: false, css: false };
+let theme = {}, themeDef = {}, sentTheme = {};
 let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer, ready = false, sent = {}, sentHdr = "", txSent = [];
 
-const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TERMS: "Terms", TEXTS: "Page texts" };
+const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TERMS: "Terms", COLORS: "Colors", TEXTS: "Page texts" };
 const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos", TERMS: "#tos" };
 const GRP = { links: "Home", shop: "Shop", custom: "Custom merch", commissions: "Commissions", tos: "Terms", cart: "Cart", nav: "Navigation", foot: "Footer" };
 const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", base: "shipping cost", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", closedStatus: "status when closed", open: "open", percent: "the price is a percentage (%), not money", fandom: "fandoms", character: "characters", expanded: "expanded by default", how: "“how it works” steps", items: "sections" };
@@ -168,10 +184,57 @@ function ser(v, i = "") {
 }
 const decl = o => names.map(n => `const ${n} = ${ser(o[n])};`).join("\n\n").replace(/<\//g, "<\\/") + "\n";
 
+/* ---------- colours: the variables in the :root block of style.css ---------- */
+const probe = document.body.appendChild(document.createElement("i"));
+probe.hidden = true;
+function parseColor(v) {
+  probe.style.color = ""; probe.style.color = v;
+  if (!probe.style.color) return null;
+  const n = getComputedStyle(probe).color.match(/[\d.]+/g);
+  return n && n.length >= 3 ? { r: +n[0], g: +n[1], b: +n[2], a: n[3] === undefined ? 1 : +n[3] } : null;
+}
+const h2 = n => Math.round(n).toString(16).padStart(2, "0");
+const toHex = c => "#" + h2(c.r) + h2(c.g) + h2(c.b) + (c.a < 1 ? h2(c.a * 255) : "");
+// [variable, label, has opacity]
+const CGROUPS = [
+  ["Page", [["--paper", "Page background"], ["--nav", "Menu bar", 1], ["--white", "Panels: cart, filters, fields"], ["--line", "Thin lines", 1], ["--outline", "Outlines of chips, fields, icons", 1], ["--overlay", "Dimming behind the cart", 1]]],
+  ["Text", [["--ink", "Body text"], ["--muted", "Secondary text", 1], ["--heading", "Headings"], ["--link", "Links"]]],
+  ["Accent", [["--rose", "Accent: buttons, prices, numbers"], ["--rose-soft", "Accent soft: hover, selection"], ["--on-accent", "Text on the accent"], ["--star", "Twinkling stars"]]],
+  ["Dark elements", [["--dark", "Active chip, strong lines, toast"], ["--on-dark", "Text on dark"]]],
+  ["Tags on photos", [["--pill", "Labels and price tags", 1]]],
+  ["Placeholder tiles", [["--t0", "Tile 1 (and header placeholder)"], ["--t1", "Tile 2"], ["--t2", "Tile 3"], ["--t3", "Tile 4"], ["--t4", "Tile 5"]]]
+];
+function crow(k, label, alpha) {
+  const c = parseColor(theme[k]) || { r: 0, g: 0, b: 0, a: 1 };
+  return `<div class="cr" data-cv="${k}"><span class="cl" title="${k}">${esc(label)}</span>${alpha ? `<input type="range" min="0" max="100" value="${Math.round(c.a * 100)}" data-cr="a" title="Opacity">` : "<span></span>"}<input type="text" class="hx" data-cr="hex" value="${toHex(c)}" maxlength="9" spellcheck="false" title="#rrggbb or #rrggbbaa"><input type="color" data-cr="pick" value="${toHex({ ...c, a: 1 })}" title="Pick a colour"><button type="button" class="rs${theme[k] === themeDef[k] ? " off" : ""}" data-cr="reset" title="Back to the published colour">↺</button></div>`;
+}
+function colorsHtml() {
+  if (!Object.keys(theme).length) return '<p class="note">No colour variables found in style.css. Upload the new style.css to the repository first.</p>';
+  const seen = new Set();
+  let h = '<div class="cbar"><span class="note">Changes appear in the preview at once.</span><button type="button" class="btn ghost" data-cr="reset-all">Reset all</button></div>';
+  for (const [g, rows] of CGROUPS) {
+    const r = rows.filter(([k]) => k in theme);
+    r.forEach(([k]) => seen.add(k));
+    if (r.length) h += `<div class="ah">${g}</div>` + r.map(([k, l, a]) => crow(k, l, a)).join("");
+  }
+  const rest = Object.keys(theme).filter(k => !seen.has(k));
+  if (rest.length) h += '<div class="ah">Other</div>' + rest.map(k => crow(k, k)).join("");
+  return h;
+}
+function setVar(k, v) {
+  theme[k] = v;
+  files.css = files.css.replace(new RegExp("(" + k + "\\s*:\\s*)([^;]+)(;)"), "$1" + v + "$3");
+  dirty.css = true; sync();
+}
+
 /* ---------- load ---------- */
 async function load() {
   const [html, css, app, conf] = await Promise.all(["index.html", "style.css", "app.js", "config.js"].map(rawFile));
   files = { css, app };
+  theme = {};
+  const root = css.match(/:root\s*\{([\s\S]*?)\n\}/);
+  if (root) for (const m of root[1].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) if (parseColor(m[2].trim())) theme[m[1]] = m[2].trim();
+  themeDef = { ...theme }; sentTheme = { ...theme };
   doc = new DOMParser().parseFromString(html, "text/html");
   names = [...conf.matchAll(/^const\s+([A-Z_]+)\s*=/gm)].map(m => m[1]);
   names.sort((a, b) => (Object.keys(TABS).indexOf(a) + 99) % 99 - (Object.keys(TABS).indexOf(b) + 99) % 99);
@@ -205,7 +268,7 @@ function viewCfg() {
 function build() {
   const v = viewCfg();
   sent = {}; names.forEach(n => { sent[n] = JSON.stringify(v[n]); });
-  sentHdr = urlFor(hdrPath); txSent = TX.map(e => e.innerHTML);
+  sentHdr = urlFor(hdrPath); txSent = TX.map(e => e.innerHTML); sentTheme = { ...theme };
   const d = doc.cloneNode(true);
   [...d.body.querySelectorAll(SEL)].filter(txOk).forEach((e, i) => { e.setAttribute("data-tx", i); e.setAttribute("data-raw", e.innerHTML); });
   const mk = (t, txt) => { const e = d.createElement(t); e.textContent = txt; return e; };
@@ -335,6 +398,7 @@ function previewScript(init) {
   addEventListener("message", e => {
     const m = e.data;
     if (!m || e.source !== parent) return;
+    if (m.t === "set-vars") { for (const k in m.vars) document.documentElement.style.setProperty(k, m.vars[k]); return; }
     const S = window.__shop;
     if (!S) { post({ t: "reload" }); return; }
     if (m.t === "set-cfg") {
@@ -365,12 +429,15 @@ function flush() {
   const w = $("#view").contentWindow, v = viewCfg(), data = {};
   for (const n of names) { const j = JSON.stringify(v[n]); if (j !== sent[n]) { sent[n] = j; data[n] = v[n]; } }
   if (Object.keys(data).length) w.postMessage({ t: "set-cfg", data }, "*");
+  const vars = {};
+  for (const k in theme) if (theme[k] !== sentTheme[k]) { sentTheme[k] = theme[k]; vars[k] = theme[k]; }
+  if (Object.keys(vars).length) w.postMessage({ t: "set-vars", vars }, "*");
   const h = urlFor(hdrPath);
   if (h !== sentHdr) { sentHdr = h; w.postMessage({ t: "set-hdr", src: h }, "*"); }
   TX.forEach((e, i) => { if (e.innerHTML !== txSent[i]) { txSent[i] = e.innerHTML; w.postMessage({ t: "set-tx", i, html: e.innerHTML }, "*"); } });
 }
 function upd() {
-  const any = dirty.cfg || dirty.html || pend.size > 0;
+  const any = dirty.cfg || dirty.html || dirty.css || pend.size > 0;
   $("#state").textContent = any ? "Unpublished changes" : "Everything is published";
   $("#pub").disabled = !any;
 }
@@ -414,11 +481,11 @@ function jump(p) {
 
 /* ---------- editor ---------- */
 function renderTabs() {
-  $("#tabs").innerHTML = [...names, "TEXTS"].map(n => `<button type="button" data-tab="${n}" class="${n === tab ? "on" : ""}">${esc(TABS[n] || n)}</button>`).join("");
+  $("#tabs").innerHTML = [...names, "COLORS", "TEXTS"].map(n => `<button type="button" data-tab="${n}" class="${n === tab ? "on" : ""}">${esc(TABS[n] || n)}</button>`).join("");
 }
 function renderPanel() {
   const dl = ["type", "fandom", "character"].map(k => `<datalist id="dl-${k}">${[...new Set((cfg.PRODUCTS || []).flatMap(x => [].concat(x[k] || [])).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("")}</datalist>`).join("");
-  $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + (tab === "TERMS" ? '<p class="note">Texts can contain HTML, for example a link: &lt;a data-contact href="#"&gt;Telegram&lt;/a&gt;</p>' : "") + ed(cfg[tab], tab);
+  $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : tab === "COLORS" ? colorsHtml() : dl + (tab === "TERMS" ? '<p class="note">Texts can contain HTML, for example a link: &lt;a data-contact href="#"&gt;Telegram&lt;/a&gt;</p>' : "") + ed(cfg[tab], tab);
 }
 function item(x, p, i) {
   const t = x && typeof x === "object" ? (x.name || x.title || x.text || x.alt || "") : String(i + 1);
@@ -624,9 +691,36 @@ panel.addEventListener("toggle", e => {
   if (d.matches && d.matches("details.it")) { if (d.open) openSet.add(d.dataset.p); else openSet.delete(d.dataset.p); }
 }, true);
 
+/* ---------- colour editor ---------- */
+function commit(row, c, skip) {
+  const k = row.dataset.cv, v = toHex(c);
+  setVar(k, v);
+  const q = s => row.querySelector(s);
+  if (skip !== "hex") { q(".hx").value = v; q(".hx").classList.remove("bad"); }
+  if (skip !== "pick") q('[data-cr="pick"]').value = toHex({ ...c, a: 1 });
+  if (skip !== "a" && q('[data-cr="a"]')) q('[data-cr="a"]').value = Math.round(c.a * 100);
+  q(".rs").classList.toggle("off", v === themeDef[k]);
+}
+panel.addEventListener("input", e => {
+  const el = e.target, row = el.closest && el.closest("[data-cv]"), t = el.dataset && el.dataset.cr;
+  if (!row || !t) return;
+  const cur = parseColor(theme[row.dataset.cv]) || { r: 0, g: 0, b: 0, a: 1 };
+  if (t === "hex") { const c = parseColor(el.value.trim()); el.classList.toggle("bad", !c); if (c) commit(row, c, "hex"); }
+  else if (t === "pick") commit(row, { ...parseColor(el.value), a: cur.a }, "pick");
+  else if (t === "a") commit(row, { ...cur, a: el.value / 100 }, "a");
+});
+panel.addEventListener("click", e => {
+  const b = e.target.closest("button[data-cr]");
+  if (!b) return;
+  if (b.dataset.cr === "reset") { const k = b.closest("[data-cv]").dataset.cv; setVar(k, themeDef[k]); }
+  else if (b.dataset.cr === "reset-all") { for (const k in theme) if (theme[k] !== themeDef[k]) setVar(k, themeDef[k]); }
+  else return;
+  const st = panel.scrollTop; renderPanel(); panel.scrollTop = st;
+});
+
 /* ---------- resizable settings panel ---------- */
 const grip = $("#grip"), side = $("aside"), WKEY = "shop-admin-width";
-const setW = w => document.documentElement.style.setProperty("--aw", Math.min(Math.max(300, innerWidth - 260), Math.max(300, Math.round(w))) + "px");
+const setW = w => document.documentElement.style.setProperty("--aw", Math.min(Math.max(340, innerWidth - 260), Math.max(340, Math.round(w))) + "px");
 const saveW = () => { try { localStorage.setItem(WKEY, Math.round(side.getBoundingClientRect().width)); } catch (e) {} };
 try { const w = +localStorage.getItem(WKEY); if (w) setW(w); } catch (e) {}
 const endDrag = () => { grip.classList.remove("on"); $("main").classList.remove("drag"); saveW(); };
@@ -662,6 +756,7 @@ $("#pub").addEventListener("click", async () => {
     const out = [];
     if (dirty.cfg) out.push({ path: "config.js", content: "/* Shop settings. This file is rewritten by the admin site. */\n\n" + decl(cfg), encoding: "utf-8" });
     if (dirty.html) out.push({ path: "index.html", content: "<!doctype html>\n" + doc.documentElement.outerHTML, encoding: "utf-8" });
+    if (dirty.css) out.push({ path: "style.css", content: files.css, encoding: "utf-8" });
     const used = JSON.stringify(cfg);
     for (const p of pend) if (p === hdrPath || used.includes(JSON.stringify(p))) out.push({ path: p, content: store[p].split(",")[1], encoding: "base64" });
     const tree = [];
@@ -669,7 +764,7 @@ $("#pub").addEventListener("click", async () => {
     const t = await post("/git/trees", { base_tree: commit.tree.sha, tree });
     const c = await post("/git/commits", { message: "Update shop via admin", tree: t.sha, parents: [head] });
     await post(`/git/refs/heads/${S.branch}`, { sha: c.sha }, "PATCH");
-    dirty.cfg = dirty.html = false; pend.clear(); upd();
+    dirty.cfg = dirty.html = dirty.css = false; themeDef = { ...theme }; pend.clear(); upd(); if (tab === "COLORS") renderPanel();
     st.textContent = "Published. The site updates in about a minute.";
   } catch (err) { st.textContent = "Publish failed: " + err.message; btn.disabled = false; }
 });

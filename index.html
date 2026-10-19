@@ -42,6 +42,7 @@ details.it>summary::-webkit-details-marker{display:none}
 details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 .body{padding:0 10px}
 .tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.num{flex-shrink:0;min-width:20px;color:var(--muted);font-weight:700}
 .th{width:28px;height:28px;object-fit:cover;border-radius:5px;background:var(--soft)}
 .ctl{display:flex;gap:4px}
 .ctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
@@ -417,7 +418,7 @@ function renderPanel() {
 }
 function item(x, p, i) {
   const t = x && typeof x === "object" ? (x.name || x.title || x.text || x.alt || "") : String(x);
-  return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
+  return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${typeof x === "string" ? `<b class="num">${i + 1}.</b>` : ""}${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
 }
 const tagsHtml = (v, p, k) => v.map((t, i) => `<span class="tag">${esc(t)}<button type="button" data-a="untag" data-p="${p}" data-i="${i}" aria-label="Remove">✕</button></span>`).join("")
   + `<input class="tagin" list="dl-${k}" placeholder="add and press Enter" data-tagin="${p}" data-k="${k}">`;

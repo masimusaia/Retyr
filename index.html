@@ -51,6 +51,22 @@ details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
 .im input[type=text]{flex:1}
 .up{padding:7px 12px;cursor:pointer}
 .arr>.btn{margin:2px 0 12px}
+.blk{border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px;background:#fcf8f9}
+.bh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--muted)}
+.blk textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;resize:vertical}
+.blk textarea:focus,.tbl input:focus{outline:0;border-color:var(--rose)}
+.ln{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}
+.ln .n{width:20px;flex-shrink:0;padding-top:8px;text-align:right;color:var(--muted)}
+.ln .ctl{flex-wrap:wrap;width:56px;flex-shrink:0}
+.addrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.addrow .btn,.blk>.btn,.blk .btn{padding:6px 12px;font-size:13px}
+.tbl{overflow-x:auto;margin:6px 0 8px;padding-bottom:4px}
+.tbl table{border-collapse:separate;border-spacing:3px}
+.tbl td{padding:0}
+.tbl input[type=text]{width:112px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.mini{display:flex;gap:2px;justify-content:center}
+.mini button{width:22px;height:22px;padding:0;border:1px solid var(--line);border-radius:5px;background:none;cursor:pointer;font-size:11px;line-height:1}
+.mini button:hover{background:var(--soft)}
 .tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .tags:focus-within{border-color:var(--rose)}
 .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--soft)}
@@ -110,10 +126,10 @@ let cfg, names = [], files = {}, doc, TX = [], tmpl = {}, tab = "";
 const store = {}, pend = new Set(), openSet = new Set(), dirty = { cfg: false, html: false };
 let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer;
 
-const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TEXTS: "Page texts" };
-const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos" };
+const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TERMS: "Terms", TEXTS: "Page texts" };
+const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos", TERMS: "#tos" };
 const GRP = { links: "Home", shop: "Shop", custom: "Custom merch", commissions: "Commissions", tos: "Terms", cart: "Cart", nav: "Navigation", foot: "Footer" };
-const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", base: "shipping cost", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", closedStatus: "status when closed", open: "open", percent: "the price is a percentage (%), not money", fandom: "fandoms", character: "characters" };
+const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", base: "shipping cost", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", closedStatus: "status when closed", open: "open", percent: "the price is a percentage (%), not money", fandom: "fandoms", character: "characters", expanded: "expanded by default", how: "“how it works” steps", items: "sections" };
 const TAGS = new Set(["fandom", "character"]);
 const txOk = e => e.innerHTML.trim() && !e.querySelector("[id]");
 const NUL = new Set(["from", "freeFrom"]);
@@ -352,10 +368,10 @@ function renderTabs() {
 }
 function renderPanel() {
   const dl = ["type", "fandom", "character"].map(k => `<datalist id="dl-${k}">${[...new Set((cfg.PRODUCTS || []).flatMap(x => [].concat(x[k] || [])).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("")}</datalist>`).join("");
-  $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + ed(cfg[tab], tab);
+  $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + (tab === "TERMS" ? '<p class="note">Texts can contain HTML, for example a link: &lt;a data-contact href="#"&gt;Telegram&lt;/a&gt;</p>' : "") + ed(cfg[tab], tab);
 }
 function item(x, p, i) {
-  const t = x && typeof x === "object" ? (x.name || x.text || x.alt || "") : String(x);
+  const t = x && typeof x === "object" ? (x.name || x.title || x.text || x.alt || "") : String(x);
   return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
 }
 const tagsHtml = (v, p, k) => v.map((t, i) => `<span class="tag">${esc(t)}<button type="button" data-a="untag" data-p="${p}" data-i="${i}" aria-label="Remove">✕</button></span>`).join("")
@@ -374,9 +390,66 @@ function addTag(inp) {
   if (!a.some(x => x.toLowerCase() === v.toLowerCase())) a.push(v);
   dirty.cfg = true; refreshTags(p, true); sync();
 }
+/* ---------- terms: blocks (paragraph, lists, table) ---------- */
+const BL = { p: "Paragraph", ol: "Numbered list", ul: "Bullet list", table: "Table" };
+const cb = (a, p, i, t, title) => `<button type="button" data-a="${a}" data-p="${p}" data-i="${i}" title="${title}">${t}</button>`;
+const ta = (p, k, val) => `<textarea rows="${Math.min(8, Math.ceil(String(val).length / 45) || 1)}" data-p="${p}" data-t="s" data-k="${k}">${esc(val)}</textarea>`;
+function blockHtml(b, p) {
+  let body = "", extra = "";
+  if (b.type === "p") body = ta(p + ".text", "para", b.text || "");
+  else if (b.type === "ol" || b.type === "ul") {
+    extra = cb("btoggle", p, 0, "⇄", "Numbered / bullet list");
+    body = (b.items || []).map((t, j) => `<div class="ln"><span class="n">${b.type === "ol" ? (j + 1) + "." : "•"}</span>${ta(p + ".items." + j, "li", t)}<span class="ctl">${cb("lup", p, j, "↑", "Move up")}${cb("ldown", p, j, "↓", "Move down")}${cb("ladd", p, j, "+", "Add a line below")}${cb("ldel", p, j, "✕", "Delete the line")}</span></div>`).join("");
+    if (!(b.items || []).length) body = `<button type="button" class="btn ghost" data-a="ladd" data-p="${p}" data-i="-1">+ Add a line</button>`;
+  } else if (b.type === "table") {
+    const rows = b.rows || [], head = rows[0] || [];
+    body = `<label class="chk"><input type="checkbox" data-p="${p}.header" data-t="b"${b.header !== false ? " checked" : ""}> first row is a header</label>
+<div class="tbl"><table><tr><td></td>${head.map((_, c) => `<td><span class="mini">${cb("col+", p, c, "+", "Insert a column after")}${cb("col-", p, c, "✕", "Delete the column")}</span></td>`).join("")}</tr>${rows.map((r, ri) => `<tr><td><span class="mini">${cb("row+", p, ri, "+", "Insert a row below")}${cb("row-", p, ri, "✕", "Delete the row")}</span></td>${r.map((c, ci) => `<td><input type="text" data-p="${p}.rows.${ri}.${ci}" data-t="s" value="${esc(c)}"></td>`).join("")}</tr>`).join("")}</table></div>
+<button type="button" class="btn ghost" data-a="tblzones" data-p="${p}">Fill from shipping zones</button>`;
+  }
+  return `<div class="blk" data-blk="${p}"><div class="bh"><span>${esc(BL[b.type] || b.type)}</span><span class="ctl">${extra}${cb("bup", p, 0, "↑", "Move up")}${cb("bdown", p, 0, "↓", "Move down")}${cb("bdel", p, 0, "✕", "Delete the block")}</span></div>${body}</div>`;
+}
+const blocksEd = (v, p) => `<div class="blocks"><div class="ah">Content</div>${v.map((b, i) => blockHtml(b, p + "." + i)).join("")}<div class="addrow">${Object.keys(BL).map(t => `<button type="button" class="btn ghost" data-a="badd" data-p="${p}" data-t="${t}">+ ${BL[t]}</button>`).join("")}</div></div>`;
+
+const newBlock = t => t === "table" ? { type: "table", header: true, rows: [["", ""], ["", ""]] } : t === "p" ? { type: "p", text: "" } : { type: t, items: [""] };
+const mv = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; };
+function redraw(sel) {
+  const pn = $("#panel"), st = pn.scrollTop;
+  renderPanel(); pn.scrollTop = st;
+  dirty.cfg = true; sync();
+  const el = sel && $(sel);
+  if (el) el.focus();
+}
+function blockAction(a, b) {
+  const p = b.dataset.p, i = +b.dataset.i, cut = p.lastIndexOf(".");
+  const blk = () => get(p), list = () => get(p).items, rows = () => get(p).rows;
+  switch (a) {
+    case "badd": { const arr = get(p); arr.push(newBlock(b.dataset.t)); redraw(`[data-blk="${p}.${arr.length - 1}"] textarea, [data-blk="${p}.${arr.length - 1}"] input[type=text]`); return true; }
+    case "bup": case "bdown": mv(get(p.slice(0, cut)), +p.slice(cut + 1), a === "bup" ? -1 : 1); redraw(); return true;
+    case "bdel": if (!confirm("Delete this block?")) return true; get(p.slice(0, cut)).splice(+p.slice(cut + 1), 1); redraw(); return true;
+    case "btoggle": blk().type = blk().type === "ol" ? "ul" : "ol"; redraw(); return true;
+    case "ladd": list().splice(i + 1, 0, ""); redraw(`[data-p="${p}.items.${i + 1}"]`); return true;
+    case "ldel": if (list().length > 1) list().splice(i, 1); else list()[0] = ""; redraw(); return true;
+    case "lup": case "ldown": mv(list(), i, a === "lup" ? -1 : 1); redraw(); return true;
+    case "row+": rows().splice(i + 1, 0, (rows()[0] || [""]).map(() => "")); redraw(`[data-p="${p}.rows.${i + 1}.0"]`); return true;
+    case "row-": if (rows().length > 1) rows().splice(i, 1); redraw(); return true;
+    case "col+": rows().forEach(r => r.splice(i + 1, 0, "")); redraw(`[data-p="${p}.rows.0.${i + 1}"]`); return true;
+    case "col-": if (rows()[0].length > 1) rows().forEach(r => r.splice(i, 1)); redraw(); return true;
+    case "tblzones": {
+      if (!confirm("Replace the table with the current shipping zones?")) return true;
+      const c = cfg.SHOP.currency || "";
+      blk().header = true;
+      blk().rows = [["Destination", "Time", "Shipping", "Free shipping"], ...cfg.SHOP.zones.map(z => [z.name, z.days, z.base + " " + c, z.freeFrom ? "from " + z.freeFrom + " " + c : "none"])];
+      redraw(); return true;
+    }
+  }
+  return false;
+}
+
 function ed(v, p, k) {
   const lab = LBL[k] || k || "";
   if (k === "id") return "";
+  if (k === "blocks" && Array.isArray(v)) return blocksEd(v, p);
   if (TAGS.has(k) && Array.isArray(v)) return `<div class="f"><label>${esc(lab)}</label><div class="tags" data-tags="${p}">${tagsHtml(v, p, k)}</div></div>`;
   if (Array.isArray(v)) return `<div class="arr"><div class="ah">${esc(lab || TABS[p] || p)}</div>${v.map((x, i) => item(x, p + "." + i, i)).join("")}<button type="button" class="btn ghost" data-a="add" data-p="${p}">+ Add</button></div>`;
   if (v && typeof v === "object") return `<div class="obj">${k ? `<div class="ah">${esc(lab)}</div>` : ""}${Object.keys(v).map(x => ed(v[x], p + "." + x, x)).join("")}</div>`;
@@ -440,7 +513,7 @@ panel.addEventListener("input", e => {
     if (Number.isNaN(v)) return;
   }
   setv(p, v); dirty.cfg = true;
-  if (["name", "text", "alt"].includes(el.dataset.k)) {
+  if (["name", "title", "text", "alt"].includes(el.dataset.k)) {
     const d = el.closest("details.it");
     if (d) d.querySelector(".tt").textContent = v || "…";
   }
@@ -470,16 +543,23 @@ panel.addEventListener("click", e => {
   if (!b) return;
   e.preventDefault();
   const a = b.dataset.a, p = b.dataset.p;
+  if (blockAction(a, b)) return;
   if (a === "untag") { get(p).splice(+b.dataset.i, 1); dirty.cfg = true; refreshTags(p, true); sync(); return; }
   if (a === "add") {
     const t = tmpl[p];
-    if (!t) { $("#state").textContent = "Nothing to copy from: add one item to config.js first"; return; }
-    const n = structuredClone(t), arr = get(p);
-    if ("id" in n) n.id = "n" + Date.now().toString(36);
-    if ("img" in n) n.img = "";
-    if ("name" in n) n.name = "New item";
-    if ("soldOut" in n) n.soldOut = false;
-    if ("isNew" in n) n.isNew = false;
+    if (t === undefined) { $("#state").textContent = "Nothing to copy from: add one item to config.js first"; return; }
+    const arr = get(p);
+    let n;
+    if (p === "TERMS.items") n = { title: "New item", expanded: false, blocks: [{ type: "p", text: "" }] };
+    else if (typeof t !== "object" || t === null) n = "";
+    else {
+      n = structuredClone(t);
+      if ("id" in n) n.id = "n" + Date.now().toString(36);
+      if ("img" in n) n.img = "";
+      if ("name" in n) n.name = "New item";
+      if ("soldOut" in n) n.soldOut = false;
+      if ("isNew" in n) n.isNew = false;
+    }
     arr.push(n); openSet.add(p + "." + (arr.length - 1));
   } else {
     const ap = p.slice(0, p.lastIndexOf(".")), i = +p.slice(p.lastIndexOf(".") + 1), arr = get(ap);

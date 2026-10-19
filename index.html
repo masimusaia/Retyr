@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Shop admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&family=Yeseva+One&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2b1a23;--muted:rgba(43,26,35,.62);--line:rgba(43,26,35,.16);--paper:#f6eff1;--rose:#b8416c;--soft:#ecd5de}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;height:100dvh;display:flex;flex-direction:column;color:var(--ink);background:var(--paper);font:400 14px/1.45 Onest,system-ui,sans-serif}
+button,input,textarea,select{font:inherit;color:inherit}
+#app{display:flex;flex-direction:column;flex:1;min-height:0}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.top h1{margin:0 auto 0 0;font:400 1.3rem/1 "Yeseva One",Georgia,serif}
+#state{color:var(--muted)}
+.btn{padding:9px 16px;border-radius:999px;border:1.5px solid var(--rose);background:var(--rose);color:#fff;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--ink);border-color:var(--ink)}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--ink)}
+.btn.ghost:hover{background:var(--ink);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed;background:var(--rose);border-color:var(--rose)}
+main{flex:1;display:flex;min-height:0}
+#view{flex:1;min-width:0;border:0;background:#fff}
+aside{width:440px;display:flex;flex-direction:column;background:#fff;border-left:1px solid var(--line)}
+.tabs{display:flex;gap:4px;padding:8px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tabs button{flex-shrink:0;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer}
+.tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+#panel{flex:1;overflow:auto;padding:14px}
+.f{display:grid;gap:4px;margin-bottom:10px}
+.f>label{font-size:12px;font-weight:500;color:var(--muted)}
+.f input,.f textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.f input:focus,.f textarea:focus{outline:0;border-color:var(--rose)}
+.chk{display:flex;gap:8px;align-items:center;margin-bottom:10px;cursor:pointer}
+.ah{margin:10px 0 6px;font-weight:700}
+.obj .obj{padding-left:10px;border-left:2px solid var(--soft);margin-bottom:10px}
+details.it{border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+details.it>summary{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;list-style:none}
+details.it>summary::-webkit-details-marker{display:none}
+details.it[open]>summary{border-bottom:1px solid var(--line);margin-bottom:10px}
+.body{padding:0 10px}
+.tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.th{width:28px;height:28px;object-fit:cover;border-radius:5px;background:var(--soft)}
+.ctl{display:flex;gap:4px}
+.ctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+.ctl button:hover{background:var(--soft)}
+.im{display:flex;gap:8px;align-items:center}
+.im img{width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--soft)}
+.im input[type=text]{flex:1}
+.up{padding:7px 12px;cursor:pointer}
+.arr>.btn{margin:2px 0 12px}
+#login{max-width:380px;margin:8vh auto;padding:24px;background:#fff;border-radius:10px;display:grid;gap:12px}
+#login h2{margin:0;font:400 1.6rem/1 "Yeseva One",Georgia,serif}
+#login label{display:grid;gap:4px;font-weight:500}
+#login input{padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+.note{margin:0;color:var(--muted);font-size:13px}
+#err{margin:0;color:#a3122f}
+@media(max-width:900px){main{flex-direction:column}#view{flex:none;height:45%}aside{width:auto;flex:1;border-left:0;border-top:1px solid var(--line)}.top{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+
+<form id="login">
+  <h2>Shop admin</h2>
+  <label>GitHub username<input name="owner" required autocomplete="off"></label>
+  <label>Shop repository<input name="repo" required autocomplete="off"></label>
+  <label>Branch<input name="branch" value="main" required></label>
+  <label>Access token<input name="token" type="password" required autocomplete="off"></label>
+  <p class="note">Create a fine-grained token limited to the shop repository with "Contents: Read and write". It is stored only in this browser.</p>
+  <button class="btn" type="submit">Open the shop</button>
+  <p id="err"></p>
+</form>
+
+<div id="app" hidden>
+  <header class="top">
+    <h1>Shop admin</h1>
+    <span id="state"></span>
+    <button id="pub" class="btn" type="button" disabled>Publish</button>
+    <button id="out" class="btn ghost" type="button">Log out</button>
+  </header>
+  <main>
+    <iframe id="view" title="Shop preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+    <aside>
+      <div class="tabs" id="tabs"></div>
+      <div id="panel"></div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const KEY = "shop-admin";
+
+let S = {};
+try { S = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+
+let cfg, names = [], files = {}, doc, TX = [], tmpl = {}, tab = "";
+const store = {}, pend = new Set(), openSet = new Set(), dirty = { cfg: false, html: false };
+let hdrPath = "img/header.png", view = { h: "", y: 0 }, timer;
+
+const TABS = { ARTIST: "Artist", LINKS: "Links", PRODUCTS: "Products", CUSTOM: "Custom merch", COMMISSIONS: "Commissions", GALLERY: "Gallery", SHOP: "Shipping & contact", TEXTS: "Page texts" };
+const PAGE = { ARTIST: "#links", LINKS: "#links", PRODUCTS: "#shop", CUSTOM: "#custom", COMMISSIONS: "#commissions", GALLERY: "#commissions", SHOP: "#tos" };
+const GRP = { links: "Home", shop: "Shop", custom: "Custom merch", commissions: "Commissions", tos: "Terms", cart: "Cart", nav: "Navigation", foot: "Footer" };
+const LBL = { soldOut: "sold out", isNew: "show in the “new” block", freeFrom: "free shipping from (empty = never)", from: "from price (empty = ask)", minQty: "minimum quantity", per100g: "per 100 g", base: "base rate", img: "image", desc: "description", ratio: "placeholder ratio (width / height)", weight: "weight, g", closedStatus: "status when closed", open: "open" };
+const NUL = new Set(["from", "freeFrom"]);
+const LONG = new Set(["desc", "tagline", "note", "status", "closedStatus"]);
+const SEL = "h1,h2,h3,p,li,summary,th,.tile strong,.tile span,.nav a,.field label,.checks label,#cart-shop,#copy";
+
+/* ---------- GitHub ---------- */
+const base = () => `https://api.github.com/repos/${S.owner}/${S.repo}`;
+const api = (p, o = {}) => fetch(base() + p, { ...o, headers: { Authorization: "Bearer " + S.token, Accept: "application/vnd.github+json", ...(o.headers || {}) } })
+  .then(async r => { if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 160)); return r.json(); });
+const rawFile = p => fetch(`${base()}/contents/${p}?ref=${S.branch}`, { headers: { Authorization: "Bearer " + S.token, Accept: "application/vnd.github.raw+json" } })
+  .then(async r => { if (!r.ok) throw new Error(p + ": " + r.status); return r.text(); });
+const post = (p, body, method = "POST") => api(p, { method, body: JSON.stringify(body) });
+
+/* ---------- data helpers ---------- */
+const get = p => p.split(".").reduce((o, k) => o[k], cfg);
+const setv = (p, v) => { const a = p.split("."), k = a.pop(); a.reduce((o, x) => o[x], cfg)[k] = v; };
+const urlFor = p => store[p] || (/^(https?:|data:|\/\/)/.test(p) ? p : `https://raw.githubusercontent.com/${S.owner}/${S.repo}/${S.branch}/${encodeURI(p)}`);
+
+const key = k => /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k);
+function ser(v, i = "") {
+  if (Array.isArray(v)) return v.length ? "[\n" + v.map(x => i + "  " + ser(x, i + "  ")).join(",\n") + "\n" + i + "]" : "[]";
+  if (v && typeof v === "object") {
+    const ks = Object.keys(v);
+    return ks.every(k => !v[k] || typeof v[k] !== "object")
+      ? "{ " + ks.map(k => key(k) + ": " + JSON.stringify(v[k])).join(", ") + " }"
+      : "{\n" + ks.map(k => i + "  " + key(k) + ": " + ser(v[k], i + "  ")).join(",\n") + "\n" + i + "}";
+  }
+  return JSON.stringify(v);
+}
+const decl = o => names.map(n => `const ${n} = ${ser(o[n])};`).join("\n\n").replace(/<\//g, "<\\/") + "\n";
+
+/* ---------- load ---------- */
+async function load() {
+  const [html, css, app, conf] = await Promise.all(["index.html", "style.css", "app.js", "config.js"].map(rawFile));
+  files = { css, app };
+  doc = new DOMParser().parseFromString(html, "text/html");
+  names = [...conf.matchAll(/^const\s+([A-Z_]+)\s*=/gm)].map(m => m[1]);
+  names.sort((a, b) => (Object.keys(TABS).indexOf(a) + 99) % 99 - (Object.keys(TABS).indexOf(b) + 99) % 99);
+  cfg = new Function(conf + "\nreturn {" + names.join(",") + "};")();
+  const walk = (v, p) => {
+    if (Array.isArray(v)) { if (v.length) tmpl[p] = structuredClone(v[v.length - 1]); v.forEach((x, i) => walk(x, p + "." + i)); }
+    else if (v && typeof v === "object") for (const k in v) walk(v[k], p + "." + k);
+  };
+  names.forEach(n => walk(cfg[n], n));
+  const h = doc.querySelector("#site-header img");
+  if (h) hdrPath = h.getAttribute("src");
+  TX = [...doc.body.querySelectorAll(SEL)].filter(e => e.innerHTML.trim() && !e.querySelector("[id]"));
+  tab = names.includes("PRODUCTS") ? "PRODUCTS" : names[0];
+  renderTabs(); renderPanel(); rebuild(); upd();
+}
+
+/* ---------- preview ---------- */
+function build() {
+  const v = structuredClone(cfg);
+  (function f(o) { for (const k in o) { const x = o[k]; if (k === "img" && typeof x === "string" && x) o[k] = urlFor(x); else if (x && typeof x === "object") f(x); } })(v);
+  const d = doc.cloneNode(true);
+  const mk = (t, txt) => { const e = d.createElement(t); e.textContent = txt; return e; };
+  d.querySelector('link[href="style.css"]')?.replaceWith(mk("style", files.css));
+  d.querySelector('script[src="config.js"]')?.replaceWith(mk("script", decl(v)));
+  d.querySelector('script[src="app.js"]')?.replaceWith(mk("script", files.app));
+  d.querySelector("#site-header img")?.setAttribute("src", urlFor(hdrPath));
+  const hash = /^#[\w-]+$/.test(view.h) ? `location.hash="${view.h}";` : "";
+  d.head.prepend(mk("script", `${hash}addEventListener("load",()=>scrollTo(0,${+view.y || 0}));addEventListener("scroll",()=>parent.postMessage({y:scrollY},"*"));document.addEventListener("click",()=>setTimeout(()=>parent.postMessage({h:location.hash},"*"),60),true);`));
+  return "<!doctype html>" + d.documentElement.outerHTML;
+}
+const rebuild = () => { $("#view").srcdoc = build(); };
+function sync() { clearTimeout(timer); timer = setTimeout(rebuild, 350); upd(); }
+function upd() {
+  const any = dirty.cfg || dirty.html || pend.size > 0;
+  $("#state").textContent = any ? "Unpublished changes" : "Everything is published";
+  $("#pub").disabled = !any;
+}
+addEventListener("message", e => { if (e.source === $("#view").contentWindow && e.data) Object.assign(view, e.data); });
+
+/* ---------- editor ---------- */
+function renderTabs() {
+  $("#tabs").innerHTML = [...names, "TEXTS"].map(n => `<button type="button" data-tab="${n}" class="${n === tab ? "on" : ""}">${esc(TABS[n] || n)}</button>`).join("");
+}
+function renderPanel() {
+  const dl = ["type", "fandom", "character"].map(k => `<datalist id="dl-${k}">${[...new Set((cfg.PRODUCTS || []).map(x => x[k]).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("")}</datalist>`).join("");
+  $("#panel").innerHTML = tab === "TEXTS" ? textsHtml() : dl + ed(cfg[tab], tab);
+}
+function item(x, p, i) {
+  const t = x && typeof x === "object" ? (x.name || x.text || x.alt || "") : String(x);
+  return `<details class="it" data-p="${p}"${openSet.has(p) ? " open" : ""}><summary>${x && x.img ? `<img class="th" src="${esc(urlFor(x.img))}" alt="">` : ""}<span class="tt">${esc(t || "Item " + (i + 1))}</span><span class="ctl"><button type="button" data-a="up" data-p="${p}" title="Move up">↑</button><button type="button" data-a="down" data-p="${p}" title="Move down">↓</button><button type="button" data-a="del" data-p="${p}" title="Delete">✕</button></span></summary><div class="body">${ed(x, p)}</div></details>`;
+}
+function ed(v, p, k) {
+  const lab = LBL[k] || k || "";
+  if (k === "id") return "";
+  if (Array.isArray(v)) return `<div class="arr"><div class="ah">${esc(lab || TABS[p] || p)}</div>${v.map((x, i) => item(x, p + "." + i, i)).join("")}<button type="button" class="btn ghost" data-a="add" data-p="${p}">+ Add</button></div>`;
+  if (v && typeof v === "object") return `<div class="obj">${k ? `<div class="ah">${esc(lab)}</div>` : ""}${Object.keys(v).map(x => ed(v[x], p + "." + x, x)).join("")}</div>`;
+  if (typeof v === "boolean") return `<label class="chk"><input type="checkbox" data-p="${p}" data-t="b"${v ? " checked" : ""}> ${esc(lab)}</label>`;
+  if (k === "img") return `<div class="f"><label>${esc(lab)}</label><div class="im"><img src="${v ? esc(urlFor(v)) : ""}" alt=""><input type="text" data-p="${p}" data-t="s" data-k="img" value="${esc(v)}" placeholder="img/file.jpg"><label class="btn ghost up">Upload<input type="file" accept="image/*" hidden data-up="${p}"></label></div></div>`;
+  const num = typeof v === "number" || (v === null && NUL.has(k));
+  const val = v == null ? "" : v;
+  const dl = ["type", "fandom", "character"].includes(k) ? ` list="dl-${k}"` : "";
+  const long = LONG.has(k) || String(val).length > 70;
+  return `<div class="f"><label>${esc(lab)}</label>${long
+    ? `<textarea rows="3" data-p="${p}" data-t="s" data-k="${k}">${esc(val)}</textarea>`
+    : `<input ${num ? 'inputmode="decimal" data-t="n"' : 'data-t="s"'} data-p="${p}" data-k="${k}"${dl} value="${esc(val)}">`}</div>`;
+}
+const grp = e => { const s = e.closest("section[id],aside[id],footer,.nav"); return s ? (s.id || s.className.split(" ")[0] || s.tagName.toLowerCase()) : "page"; };
+function textsHtml() {
+  const m = doc.querySelector('meta[name="description"]');
+  let h = `<div class="f"><label>Header image</label><div class="im"><img src="${esc(urlFor(hdrPath))}" alt=""><label class="btn ghost up">Upload<input type="file" accept="image/*" hidden data-hdr="1"></label></div></div>
+<div class="f"><label>Browser tab title</label><input data-meta="title" value="${esc(doc.title)}"></div>
+<div class="f"><label>Search description</label><input data-meta="desc" value="${esc(m ? m.content : "")}"></div>
+<p class="note">Texts of the pages below can contain HTML, for example links.</p>`;
+  let last = "";
+  TX.forEach((e, i) => {
+    const g = grp(e);
+    if (g !== last) { h += `<div class="ah">${esc(GRP[g] || g)}</div>`; last = g; }
+    const t = e.innerHTML.trim();
+    h += `<div class="f"><textarea rows="${Math.min(6, Math.ceil(t.length / 55) || 1)}" data-tx="${i}">${esc(t)}</textarea></div>`;
+  });
+  return h;
+}
+
+async function addImg(f, fixed) {
+  const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  const k = Math.min(1, (fixed ? 2400 : 1600) / Math.max(im.width, im.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+  c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+  const jpg = fixed ? /\.jpe?g$/i.test(fixed) : f.type === "image/jpeg";
+  const path = fixed || "img/" + (f.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "image") + "-" + Date.now().toString(36) + (jpg ? ".jpg" : ".png");
+  store[path] = c.toDataURL(jpg ? "image/jpeg" : "image/png", .9);
+  pend.add(path);
+  return path;
+}
+
+const panel = $("#panel");
+panel.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.tx !== undefined) { TX[+el.dataset.tx].innerHTML = el.value; dirty.html = true; return sync(); }
+  if (el.dataset.meta) {
+    if (el.dataset.meta === "title") doc.title = el.value;
+    else { let m = doc.querySelector('meta[name="description"]'); if (!m) { m = doc.createElement("meta"); m.name = "description"; doc.head.append(m); } m.content = el.value; }
+    dirty.html = true; return sync();
+  }
+  const p = el.dataset.p;
+  if (!p || el.type === "file") return;
+  let v = el.type === "checkbox" ? el.checked : el.value;
+  if (el.dataset.t === "n") {
+    const s = v.trim().replace(",", ".");
+    v = s === "" ? (NUL.has(el.dataset.k) ? null : 0) : Number(s);
+    if (Number.isNaN(v)) return;
+  }
+  setv(p, v); dirty.cfg = true;
+  if (["name", "text", "alt"].includes(el.dataset.k)) {
+    const d = el.closest("details.it");
+    if (d) d.querySelector(".tt").textContent = v || "…";
+  }
+  sync();
+});
+panel.addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    if (e.target.dataset.up) { setv(e.target.dataset.up, await addImg(f)); dirty.cfg = true; }
+    else if (e.target.dataset.hdr) await addImg(f, hdrPath);
+    renderPanel(); sync();
+  } catch (err) { $("#state").textContent = "Could not read the image"; }
+});
+panel.addEventListener("click", e => {
+  const b = e.target.closest("[data-a]");
+  if (!b) return;
+  e.preventDefault();
+  const a = b.dataset.a, p = b.dataset.p;
+  if (a === "add") {
+    const t = tmpl[p];
+    if (!t) { $("#state").textContent = "Nothing to copy from: add one item to config.js first"; return; }
+    const n = structuredClone(t), arr = get(p);
+    if ("id" in n) n.id = "n" + Date.now().toString(36);
+    if ("img" in n) n.img = "";
+    if ("name" in n) n.name = "New item";
+    if ("soldOut" in n) n.soldOut = false;
+    if ("isNew" in n) n.isNew = false;
+    arr.push(n); openSet.add(p + "." + (arr.length - 1));
+  } else {
+    const ap = p.slice(0, p.lastIndexOf(".")), i = +p.slice(p.lastIndexOf(".") + 1), arr = get(ap);
+    if (a === "del") { if (!confirm("Delete this item?")) return; arr.splice(i, 1); }
+    else { const j = a === "up" ? i - 1 : i + 1; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    openSet.clear();
+  }
+  dirty.cfg = true; renderPanel(); sync();
+});
+panel.addEventListener("toggle", e => {
+  const d = e.target;
+  if (d.matches && d.matches("details.it")) { if (d.open) openSet.add(d.dataset.p); else openSet.delete(d.dataset.p); }
+}, true);
+
+$("#tabs").addEventListener("click", e => {
+  const b = e.target.closest("[data-tab]");
+  if (!b) return;
+  tab = b.dataset.tab; renderTabs(); renderPanel();
+  if (PAGE[tab]) { view.h = PAGE[tab]; view.y = 0; sync(); }
+});
+
+/* ---------- publish ---------- */
+$("#pub").addEventListener("click", async () => {
+  const btn = $("#pub"), st = $("#state");
+  btn.disabled = true; st.textContent = "Publishing…";
+  try {
+    const head = (await api(`/git/ref/heads/${S.branch}`)).object.sha;
+    const commit = await api(`/git/commits/${head}`);
+    const out = [];
+    if (dirty.cfg) out.push({ path: "config.js", content: "/* Shop settings. This file is rewritten by the admin site. */\n\n" + decl(cfg), encoding: "utf-8" });
+    if (dirty.html) out.push({ path: "index.html", content: "<!doctype html>\n" + doc.documentElement.outerHTML, encoding: "utf-8" });
+    const used = JSON.stringify(cfg);
+    for (const p of pend) if (p === hdrPath || used.includes(JSON.stringify(p))) out.push({ path: p, content: store[p].split(",")[1], encoding: "base64" });
+    const tree = [];
+    for (const f of out) tree.push({ path: f.path, mode: "100644", type: "blob", sha: (await post("/git/blobs", { content: f.content, encoding: f.encoding })).sha });
+    const t = await post("/git/trees", { base_tree: commit.tree.sha, tree });
+    const c = await post("/git/commits", { message: "Update shop via admin", tree: t.sha, parents: [head] });
+    await post(`/git/refs/heads/${S.branch}`, { sha: c.sha }, "PATCH");
+    dirty.cfg = dirty.html = false; pend.clear(); upd();
+    st.textContent = "Published. The site updates in about a minute.";
+  } catch (err) { st.textContent = "Publish failed: " + err.message; btn.disabled = false; }
+});
+addEventListener("beforeunload", e => { if (!$("#pub").disabled) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- login ---------- */
+async function start() {
+  $("#err").textContent = "Loading…";
+  try { await load(); $("#login").hidden = true; $("#app").hidden = false; }
+  catch (e) { $("#err").textContent = "Could not open the repository: " + e.message; $("#login").hidden = false; $("#app").hidden = true; }
+}
+$("#login").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  S = { owner: f.get("owner").trim(), repo: f.get("repo").trim(), branch: f.get("branch").trim(), token: f.get("token").trim() };
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (err) {}
+  start();
+});
+$("#out").addEventListener("click", () => { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); });
+if (S.token) { for (const k of ["owner", "repo", "branch"]) $(`[name=${k}]`).value = S[k] || ""; start(); }
+})();
+</script>
+</body>
+</html>
